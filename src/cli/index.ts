@@ -8,6 +8,7 @@ import { UserManager } from '../core/user-manager.js';
 import { install, isInstalled, getInstalledVersion, startService, stopService, isRunning } from '../core/installer.js';
 import { logger } from '../utils/logger.js';
 import chalk from 'chalk';
+import { execSync } from 'child_process';
 
 const program = new Command();
 const manager = new UserManager();
@@ -259,14 +260,25 @@ program
       return;
     }
 
-    startService('/etc/singbox-manager/config.json');
+    // Use systemctl if available, otherwise start directly
+    try {
+      execSync('systemctl restart sing-box', { stdio: 'pipe' });
+      logger.success('Sing-box service started');
+    } catch {
+      startService('/etc/sing-box/config.json');
+    }
   });
 
 program
   .command('stop')
   .description('Stop Sing-box service')
   .action(() => {
-    stopService();
+    try {
+      execSync('systemctl stop sing-box', { stdio: 'pipe' });
+      logger.success('Sing-box service stopped');
+    } catch {
+      stopService();
+    }
   });
 
 program

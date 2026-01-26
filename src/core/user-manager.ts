@@ -13,7 +13,7 @@ import { logger } from '../utils/logger.js';
 
 /** Default state file path */
 const DEFAULT_STATE_PATH = '/etc/singbox-manager/state.json';
-const DEFAULT_CONFIG_PATH = '/etc/singbox-manager/config.json';
+const DEFAULT_CONFIG_PATH = '/etc/sing-box/config.json';
 
 /**
  * User Manager class

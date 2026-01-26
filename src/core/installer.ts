@@ -143,10 +143,13 @@ async function extractBinary(
     execSync(`unzip -o "${archivePath}" -d "${destDir}"`, { stdio: 'pipe' });
   }
 
-  // Find the extracted binary
-  const extractedDir = execSync(`ls "${destDir}" | grep sing-box`, {
-    encoding: 'utf-8',
-  }).trim();
+  // Find the extracted directory (sing-box-version-os-arch)
+  const files = execSync(`ls "${destDir}"`, { encoding: 'utf-8' }).trim().split('\n');
+  const extractedDir = files.find(f => f.startsWith('sing-box-') && !f.endsWith('.tar.gz'));
+  
+  if (!extractedDir) {
+    throw new Error('Could not find extracted sing-box directory');
+  }
 
   return join(destDir, extractedDir, SINGBOX_BINARY);
 }
