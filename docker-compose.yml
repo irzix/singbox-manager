@@ -1,0 +1,59 @@
+# Singbox Manager - Docker Compose Configuration
+# 
+# Usage:
+#   docker-compose up -d
+#
+# Environment variables:
+#   SERVER_HOST - Your server's public IP or domain
+#   SERVER_PORT - Listen port (default: 443)
+
+version: '3.8'
+
+services:
+  singbox-manager:
+    build: .
+    container_name: singbox-manager
+    restart: unless-stopped
+    
+    # Network mode host for better performance
+    # Change to bridge if you need port mapping
+    network_mode: host
+    
+    # Alternative: Use bridge network with port mapping
+    # ports:
+    #   - "443:443"
+    #   - "443:443/udp"
+    
+    volumes:
+      # Persist configuration and state
+      - singbox-data:/etc/singbox-manager
+      
+      # Optional: Mount custom config
+      # - ./config:/etc/singbox-manager:ro
+    
+    environment:
+      - NODE_ENV=production
+      - TZ=UTC
+    
+    # Required capabilities for network operations
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 128M
+
+volumes:
+  singbox-data:
+    driver: local
