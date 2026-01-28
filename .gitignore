@@ -1,8 +1,8 @@
 # Dependencies
-node_modules/
+# node_modules/  # Commented out for offline deployment
 
 # Build output
-dist/
+# dist/  # Commented out for offline deployment
 
 # IDE
 .idea/
