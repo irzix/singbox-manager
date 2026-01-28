@@ -15,9 +15,12 @@ import {
 import { generateUUID } from './utils/crypto.js';
 import { User, ManagerState, ServerConfig } from './types/index.js';
 
+import { execSync } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
+
 const PORT = process.env.API_PORT || 3000;
-const STATE_PATH = process.env.STATE_PATH || '/var/lib/singbox-manager/state.json';
-const CONFIG_PATH = process.env.CONFIG_PATH || '/etc/sing-box/config.json';
+const STATE_PATH = process.env.STATE_PATH || '/tmp/state.json';
+const CONFIG_PATH = process.env.CONFIG_PATH || '/tmp/config.json';
 
 let state: ManagerState;
 
@@ -46,6 +49,13 @@ async function saveState(): Promise<void> {
 async function updateSingboxConfig(): Promise<void> {
   const config = toSingboxConfig(state.server, state.users);
   await saveConfig(config, CONFIG_PATH);
+  
+  // Reload sing-box
+  try {
+    execSync('pkill -HUP sing-box', { stdio: 'pipe' });
+  } catch {
+    // sing-box might not be running yet
+  }
 }
 
 function sendJson(res: ServerResponse, data: unknown, status = 200): void {
@@ -400,9 +410,31 @@ function getWebUI(): string {
 </html>`;
 }
 
+let singboxProcess: ChildProcess | null = null;
+
+function startSingbox(): void {
+  if (singboxProcess) return;
+  
+  console.log('Starting sing-box...');
+  singboxProcess = spawn('./bin/sing-box', ['run', '-c', CONFIG_PATH], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  
+  singboxProcess.stdout?.on('data', (data) => console.log('[sing-box]', data.toString().trim()));
+  singboxProcess.stderr?.on('data', (data) => console.error('[sing-box]', data.toString().trim()));
+  singboxProcess.on('exit', (code) => {
+    console.log(`sing-box exited with code ${code}`);
+    singboxProcess = null;
+  });
+}
+
 async function main(): Promise<void> {
   state = await loadState();
   await saveState();
+  await updateSingboxConfig();
+  
+  // Start sing-box
+  startSingbox();
   
   const server = createServer(handleRequest);
   server.listen(PORT, () => {

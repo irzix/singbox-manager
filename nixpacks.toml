@@ -2,7 +2,7 @@
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = []
+cmds = ["chmod +x bin/sing-box"]
 
 [phases.build]
 cmds = []

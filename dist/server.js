@@ -7,9 +7,11 @@ import { readFile, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { generateDefaultServerConfig, toSingboxConfig, generateClientConfig, saveConfig, } from './core/config-generator.js';
 import { generateUUID } from './utils/crypto.js';
+import { execSync } from 'child_process';
+import { spawn } from 'child_process';
 const PORT = process.env.API_PORT || 3000;
-const STATE_PATH = process.env.STATE_PATH || '/var/lib/singbox-manager/state.json';
-const CONFIG_PATH = process.env.CONFIG_PATH || '/etc/sing-box/config.json';
+const STATE_PATH = process.env.STATE_PATH || '/tmp/state.json';
+const CONFIG_PATH = process.env.CONFIG_PATH || '/tmp/config.json';
 let state;
 async function loadState() {
     if (existsSync(STATE_PATH)) {
@@ -32,6 +34,13 @@ async function saveState() {
 async function updateSingboxConfig() {
     const config = toSingboxConfig(state.server, state.users);
     await saveConfig(config, CONFIG_PATH);
+    // Reload sing-box
+    try {
+        execSync('pkill -HUP sing-box', { stdio: 'pipe' });
+    }
+    catch {
+        // sing-box might not be running yet
+    }
 }
 function sendJson(res, data, status = 200) {
     res.writeHead(status, {
@@ -364,9 +373,27 @@ function getWebUI() {
 </body>
 </html>`;
 }
+let singboxProcess = null;
+function startSingbox() {
+    if (singboxProcess)
+        return;
+    console.log('Starting sing-box...');
+    singboxProcess = spawn('./bin/sing-box', ['run', '-c', CONFIG_PATH], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    singboxProcess.stdout?.on('data', (data) => console.log('[sing-box]', data.toString().trim()));
+    singboxProcess.stderr?.on('data', (data) => console.error('[sing-box]', data.toString().trim()));
+    singboxProcess.on('exit', (code) => {
+        console.log(`sing-box exited with code ${code}`);
+        singboxProcess = null;
+    });
+}
 async function main() {
     state = await loadState();
     await saveState();
+    await updateSingboxConfig();
+    // Start sing-box
+    startSingbox();
     const server = createServer(handleRequest);
     server.listen(PORT, () => {
         console.log(`Management API running on http://0.0.0.0:${PORT}`);
