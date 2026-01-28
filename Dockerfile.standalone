@@ -1,0 +1,49 @@
+# Sing-box Standalone Server
+# This runs sing-box directly without needing system access
+
+FROM alpine:latest
+
+# Install dependencies
+RUN apk add --no-cache \
+    curl \
+    tar \
+    ca-certificates \
+    nodejs \
+    npm
+
+# Download and install sing-box
+ARG SINGBOX_VERSION=1.8.0
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; fi && \
+    if [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi && \
+    curl -Lo /tmp/sing-box.tar.gz \
+    "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/sing-box-${SINGBOX_VERSION}-linux-${ARCH}.tar.gz" && \
+    tar -xzf /tmp/sing-box.tar.gz -C /tmp && \
+    mv /tmp/sing-box-*/sing-box /usr/local/bin/ && \
+    chmod +x /usr/local/bin/sing-box && \
+    rm -rf /tmp/*
+
+WORKDIR /app
+
+# Copy application
+COPY package.json ./
+COPY dist ./dist
+COPY node_modules ./node_modules
+
+# Create directories
+RUN mkdir -p /etc/sing-box /var/lib/singbox-manager
+
+# Environment
+ENV NODE_ENV=production
+ENV CONFIG_PATH=/etc/sing-box/config.json
+ENV STATE_PATH=/var/lib/singbox-manager/state.json
+
+# Expose ports
+EXPOSE 443
+EXPOSE 3000
+
+# Copy entrypoint
+COPY docker-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
