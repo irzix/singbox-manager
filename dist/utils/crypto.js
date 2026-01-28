@@ -32,11 +32,23 @@ export function generateShortId(length = 8) {
  */
 export async function generateRealityKeyPair() {
     try {
-        // Try using sing-box to generate keys
-        const output = execSync('sing-box generate reality-keypair', {
-            encoding: 'utf-8',
-            timeout: 5000,
-        });
+        // Try using sing-box to generate keys (check multiple paths)
+        const singboxPaths = ['./bin/sing-box', 'sing-box', '/app/bin/sing-box'];
+        let output = '';
+        for (const sbPath of singboxPaths) {
+            try {
+                output = execSync(`${sbPath} generate reality-keypair`, {
+                    encoding: 'utf-8',
+                    timeout: 5000,
+                });
+                break;
+            }
+            catch {
+                continue;
+            }
+        }
+        if (!output)
+            throw new Error('sing-box not found');
         const lines = output.trim().split('\n');
         const privateKey = lines[0]?.split(': ')[1]?.trim() || '';
         const publicKey = lines[1]?.split(': ')[1]?.trim() || '';

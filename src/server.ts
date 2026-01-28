@@ -13,7 +13,7 @@ import {
   saveConfig,
 } from './core/config-generator.js';
 import { generateUUID } from './utils/crypto.js';
-import { User, ManagerState, ServerConfig } from './types/index.js';
+import { User, ManagerState } from './types/index.js';
 
 import { execSync } from 'child_process';
 import { spawn, ChildProcess } from 'child_process';
@@ -184,6 +184,26 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
+    // API: Reset server (regenerate keys)
+    if (path === '/api/reset' && method === 'POST') {
+      const host = process.env.SERVER_HOST || '0.0.0.0';
+      const port = parseInt(process.env.SERVER_PORT || '443');
+      state.server = await generateDefaultServerConfig(host, port);
+      state.users = [];
+      await saveState();
+      await updateSingboxConfig();
+      
+      // Restart sing-box
+      if (singboxProcess) {
+        singboxProcess.kill();
+        singboxProcess = null;
+      }
+      setTimeout(() => startSingbox(), 1000);
+      
+      sendJson(res, { success: true, message: 'Server reset, new keys generated' });
+      return;
+    }
+
     sendJson(res, { error: 'Not found' }, 404);
   } catch (error) {
     console.error('Request error:', error);
@@ -278,6 +298,12 @@ function getWebUI(): string {
     <h1>🚀 Sing-box Manager</h1>
     
     <div id="message" class="hidden"></div>
+    
+    <div class="card" style="background:#2d1f1f;border:1px solid #ff4757">
+      <h2>⚠️ تنظیمات سرور</h2>
+      <p style="color:#888;margin:10px 0">اگه کانکشن کار نمیکنه، کلیدها رو دوباره بساز:</p>
+      <button class="danger" onclick="resetServer()">🔄 ریست کامل سرور</button>
+    </div>
     
     <div class="card">
       <h2>➕ افزودن کاربر جدید</h2>
@@ -404,6 +430,20 @@ function getWebUI(): string {
       }
     };
 
+    async function resetServer() {
+      if (!confirm('همه کاربران و تنظیمات پاک میشن. مطمئنی؟')) return;
+      try {
+        const res = await fetch(API + '/api/reset', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showMessage('سرور ریست شد! صفحه رو رفرش کن', 'success');
+          setTimeout(() => location.reload(), 2000);
+        }
+      } catch (e) {
+        showMessage('خطا در ریست', 'error');
+      }
+    }
+
     loadUsers();
   </script>
 </body>
@@ -415,8 +455,27 @@ let singboxProcess: ChildProcess | null = null;
 function startSingbox(): void {
   if (singboxProcess) return;
   
-  console.log('Starting sing-box...');
-  singboxProcess = spawn('./bin/sing-box', ['run', '-c', CONFIG_PATH], {
+  // Find sing-box binary
+  const singboxPaths = ['./bin/sing-box', '/app/bin/sing-box', 'sing-box'];
+  let singboxPath = '';
+  
+  for (const p of singboxPaths) {
+    try {
+      execSync(`${p} version`, { stdio: 'pipe' });
+      singboxPath = p;
+      break;
+    } catch {
+      continue;
+    }
+  }
+  
+  if (!singboxPath) {
+    console.error('sing-box binary not found!');
+    return;
+  }
+  
+  console.log(`Starting sing-box from ${singboxPath}...`);
+  singboxProcess = spawn(singboxPath, ['run', '-c', CONFIG_PATH], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   
